@@ -34,7 +34,7 @@ def get_recs_from_text(log_text):
     lines = [re.sub(r'[()%]+', '', l) for l in log_text.split('\n') if l.strip()]
 
     for i, line in enumerate(lines):
-        toks = re.split(r'\s+', lines[i])
+        toks = re.split(r'\s+', line)
         if toks[1:3] == ['mounted', 'on']:
             if rec:
                 recs.append(rec)
@@ -45,12 +45,12 @@ def get_recs_from_text(log_text):
         recs.append(rec)
     return recs
 
-def exclude_first_sample(recs, init_ts, interval):
+def post_process(recs, init_ts, interval):
     first_mnt = recs[0]['mnt']
     for i in range(1, len(recs)):
         if recs[i]['mnt'] == first_mnt:
             break
-    ts = init_ts
+    ts = init_ts 
     for r in recs[1:]:
         if r['mnt'] == first_mnt:
             ts += interval
@@ -63,7 +63,7 @@ def main(interval_secs, num_samples, out_fp):
     interval = timedelta(seconds=interval_secs)
     log_text = subprocess.check_output(cmd.split()).decode()
     recs = get_recs_from_text(log_text) 
-    recs = exclude_first_sample(recs, ts_start, interval)
+    recs = post_process(recs, ts_start, interval)
     for r in recs:
         json.dump(r, out_fp)
         print('', file=out_fp)
@@ -71,8 +71,8 @@ def main(interval_secs, num_samples, out_fp):
 # ---------------------------------------------------------------
 if __name__ == '__main__':
     MAX_LOG_SIZE = 4 * 1024 * 1024
-    interval_secs = 30
-    num_samples = 2
+    interval_secs = 15
+    num_samples = 7
     log_file = None
     if len(sys.argv) > 1:
         if len(sys.argv) > 2:
@@ -91,17 +91,18 @@ if __name__ == '__main__':
             print('Usage: %s [<interval> <num_samples>]')
             sys.exit(1)
 
-    if log_file:
-        if os.path.exists(log_file):
-            size = os.path.getsize(log_file)
-            if size > MAX_LOG_SIZE:
-                bak_file = log_file + '.bak'
-                os.rename(log_file, bak_file)
-        out_fp = open(log_file, 'a+')
-    else:
-        out_fp = sys.stdout
-    try:
-        main(interval_secs, num_samples, out_fp)
-    finally:
+    while True:
         if log_file:
-            out_fp.close()
+            if os.path.exists(log_file):
+                size = os.path.getsize(log_file)
+                if size > MAX_LOG_SIZE:
+                    bak_file = log_file + '.bak'
+                    os.rename(log_file, bak_file)
+            out_fp = open(log_file, 'a+')
+        else:
+            out_fp = sys.stdout
+        try:
+            main(interval_secs, num_samples, out_fp)
+        finally:
+            if log_file:
+                out_fp.close()
